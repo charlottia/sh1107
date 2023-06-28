@@ -1,7 +1,7 @@
 import math
 from typing import Final, Optional
 
-from amaranth import C, ClockSignal, Instance, Memory, Module, Mux, Signal
+from amaranth import C, Cat, ClockSignal, Instance, Memory, Module, Mux, Signal
 from amaranth.build import Platform
 from amaranth.lib.enum import IntEnum
 from amaranth.lib.fifo import SyncFIFO
@@ -170,17 +170,27 @@ class OLED(ConfigElaboratable):
     def elaborate(self, platform: Optional[Platform]) -> Module:
         m = Module()
 
+        packed_size = math.ceil(rom.ROM_LENGTH / 2)
+
+        addr = Signal(math.ceil(math.log2(packed_size)))
+        rd_data = Signal(16)
+        wr_en = Signal(2)
+
+        m.d.comb += [
+            addr.eq(self.rom_bus.addr >> 1),
+            self.rom_bus.data.eq(rd_data.word_select(self.rom_bus.addr[0], 8)),
+            wr_en.eq(Mux(self.rom_wr_en, 1 + (self.rom_bus.addr[0]), 0)),
+        ]
+
         match platform:
             case ICEBreakerPlatform():
-                # TODO: we only use the first 8 bits of the SPRAM's 16-bit words.
-                # It'd be better if we packed the bytes in together.
                 self.rom_mem = Instance(
                     "$mem",
                     a_ram_style="huge",
                     p_MEMID="\\rom_mem",
-                    p_SIZE=rom.ROM_LENGTH,
-                    p_ABITS=len(self.rom_bus.addr),
-                    p_WIDTH=8,
+                    p_SIZE=packed_size,
+                    p_ABITS=len(addr),
+                    p_WIDTH=16,
                     p_INIT=C(0, 0),
                     p_OFFSET=0,
                     p_RD_PORTS=1,
@@ -192,28 +202,27 @@ class OLED(ConfigElaboratable):
                     p_WR_CLK_POLARITY=C(1, 1),
                     i_RD_CLK=ClockSignal(),
                     i_RD_EN=1,
-                    i_RD_ADDR=self.rom_bus.addr,
-                    o_RD_DATA=self.rom_bus.data,
+                    i_RD_ADDR=addr,
+                    o_RD_DATA=rd_data,
                     i_WR_CLK=ClockSignal(),
-                    i_WR_EN=self.rom_wr_en.replicate(8),
-                    i_WR_ADDR=self.rom_bus.addr,
-                    i_WR_DATA=self.rom_wr_data,
+                    i_WR_EN=Cat(wr_en[0].replicate(8), wr_en[1].replicate(8)),
+                    i_WR_ADDR=addr,
+                    i_WR_DATA=self.rom_wr_data.replicate(2),
                 )
                 m.submodules.rom_mem = self.rom_mem
             case _:
                 # OrangeCrab, simulation, etc.
-                # TODO: This gets mapped to DP16KD on OrangeCrab which is also
-                # 16 bits wide. As above.
-                # Also, as is typical, zero-init ends up making the bitstream
-                # larger than if we'd put actual data in it, so this is very
-                # much for Fun(tm).
-                self.rom_mem = Memory(width=8, depth=rom.ROM_LENGTH)
+                # As is typical, zero-init ends up making the bitstream larger
+                # than if we'd put actual data in it, so this is very much for
+                # Fun(tm).
+                self.rom_mem = Memory(width=16, depth=packed_size)
                 m.submodules.rom_rd = rom_rd = self.rom_mem.read_port()
-                m.submodules.rom_wr = rom_wr = self.rom_mem.write_port()
+                m.submodules.rom_wr = rom_wr = self.rom_mem.write_port(granularity=8)
                 m.d.comb += [
-                    self.rom_bus.connect_read_port(rom_rd),
-                    rom_wr.addr.eq(self.rom_bus.addr),
-                    rom_wr.data.eq(self.rom_wr_data),
+                    rom_rd.addr.eq(addr),
+                    rd_data.eq(rom_rd.data),
+                    rom_wr.addr.eq(addr),
+                    rom_wr.data.eq(self.rom_wr_data.replicate(2)),
                     rom_wr.en.eq(self.rom_wr_en),
                 ]
 

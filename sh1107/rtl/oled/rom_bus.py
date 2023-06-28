@@ -14,14 +14,25 @@ class ROMBus(Record):
     addr: Signal
     data: Signal
 
-    def __init__(self, addr: ShapeCastable, width: ShapeCastable):
+    splits: int
+
+    def __init__(
+        self,
+        addr: ShapeCastable,
+        data: ShapeCastable,
+        *,
+        splits: int = 1,
+    ):
         super().__init__(
             [
                 ("addr", addr, DIR_FANIN),
-                ("data", width, DIR_FANOUT),
+                ("data", data, DIR_FANOUT),
             ],
             name="ROMBus",
         )
+        self.splits = splits
+
+        assert len(self.data) // splits * splits == len(self.data)
 
     @classmethod
     def for_read_port(cls, rom_rd: ReadPort):
@@ -29,10 +40,19 @@ class ROMBus(Record):
 
     def clone(self) -> Self:
         # "like" gives back a Record, not an instance.
-        return ROMBus(self.addr.shape(), self.data.shape())
+        return ROMBus(
+            self.addr.shape(),
+            self.data.shape(),
+            splits=self.splits,
+        )
 
     def connect_read_port(self, rom_rd: ReadPort) -> list[Statement]:
         return [
             rom_rd.addr.eq(self.addr),
-            self.data.eq(rom_rd.data),
+            self.data.eq(
+                rom_rd.data.word_select(
+                    self.addr % self.splits,
+                    len(self.data) // self.splits,
+                )
+            ),
         ]
