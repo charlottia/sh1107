@@ -1,6 +1,4 @@
-# [sh1107](https://hrzn.ee/kivikakk/sh1107)
-
-[![Build status]](https://buildkite.com/hrzn/sh1107)
+# sh1107
 
 This repository is a testbed for exploring [Amaranth] while learning digital
 design. It consists of a basic driver for SH1107-type OLEDs over I²C such as the
@@ -9,7 +7,6 @@ controller, plus a simple SPI flash reader. The driver supports commands akin to
 old BASIC: `CLS`, `PRINT`, `LOCATE`. The classic IBM 8x8 font is used to this
 end.
 
-[Build status]: https://badge.buildkite.com/50b21967ee2e88d80db0bd35a97173a66f322b5d2141d21060.svg?branch=main
 [Amaranth]: https://github.com/amaranth-lang/amaranth
 [Pimoroni OLED]: https://shop.pimoroni.com/products/1-12-oled-breakout
 

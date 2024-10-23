@@ -4,7 +4,7 @@
   inputs = {
     flake-utils.url = github:numtide/flake-utils;
     hdx = {
-      url = git+https://hrzn.ee/kivikakk/hdx?ref=stripped;
+      url = github:charlottia/hdx?ref=stripped;
       inputs.flake-utils.follows = "flake-utils";
     };
     nixpkgs.follows = "hdx/nixpkgs";
